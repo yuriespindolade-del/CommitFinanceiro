@@ -14,8 +14,8 @@
             theme: {
                 extend: {
                     colors: {
-                        'primary-dark': '#0B375B',       // Azul Escuro (Principal) - Alterado para Dark Blue para contraste
-                        'primary-light': '#1A82D9',      // Azul Claro (Destaque/Hover)
+                        'primary-dark': '#1A82D9',       // Azul Escuro (Principal)
+                        'primary-light': '#0B375B',      // Azul Claro (Destaque/Hover)
                         'accent-yellow': '#FAC835',      // Amarelo (Acento neutro/Total)
                     }
                 }
@@ -93,22 +93,19 @@
                 recebimentoStatus: newRecebimentoStatus,
             }).catch(error => {
                 console.error("Erro ao salvar no Firebase:", error);
-                // Não usamos alert(), mas é bom registrar o erro
             });
         };
 
-        // --- Componente para Configurar o ID do Grupo Compartilhado ---
+        // --- NOVO: Componente para Configurar o ID do Grupo Compartilhado ---
         const SharedIdInput = ({ sharedAccessId, setSharedAccessId }) => {
             const [newId, setNewId] = useState(sharedAccessId);
             const [isEditing, setIsEditing] = useState(false);
 
             const handleSave = (e) => {
                 e.preventDefault();
-                // Limpa o ID para ser seguro para o Firestore
-                const cleanId = newId.trim().toLowerCase().replace(/[^a-z0-9_]/g, ''); 
+                const cleanId = newId.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
                 if (cleanId) {
                     setSharedAccessId(cleanId);
-                    localStorage.setItem('minhas_financas_shared_id', cleanId); // Salva no local storage
                 } else {
                     setNewId(sharedAccessId);
                 }
@@ -182,7 +179,7 @@
                     <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-primary-dark/20">
                         <div className="p-6 bg-primary-dark text-white flex flex-col items-center">
                             <h1 className="text-3xl font-bold">Minhas Finanças <span className="text-accent-yellow">JR</span></h1>
-                            <p className="mt-1 text-sm opacity-80">Acesso Compartilhado</p>
+                            <p className="mt-1 text-sm opacity-80">Acesso Pessoal</p>
                         </div>
                         <form onSubmit={handleAuth} className="p-8 space-y-5">
                             <h2 className="text-xl font-semibold text-gray-800 text-center">{isLogin ? 'Fazer Login' : 'Criar Conta'}</h2>
@@ -234,12 +231,10 @@
         };
 
         // --- COMPONENTE: PlanilhaView (Nova Tela) ---
-        const PlanilhaView = ({ movimentacoes, excluirDivida, toggleStatus, isDataLoading }) => {
+        const PlanilhaView = ({ movimentacoes, excluirDivida, toggleStatus }) => {
             
             // 1. Calcular Saldo Acumulado Mês a Mês para o Gráfico
             const chartData = useMemo(() => {
-                if(isDataLoading) return { chartArray: [], maxAbsValue: 0 }; // Evita cálculo desnecessário
-                
                 const today = new Date();
                 const currentMonthIndex = today.getMonth() + 1;
                 const currentYear = today.getFullYear();
@@ -308,7 +303,7 @@
 
                 return { chartArray, maxAbsValue };
                 
-            }, [movimentacoes, isDataLoading]);
+            }, [movimentacoes]);
             
             // 2. Tabela de Movimentações
             const tableItems = movimentacoes.allMovimentacoes.slice().reverse();
@@ -322,15 +317,6 @@
                     : 0,
                 isPositive: data.cumulativeBalance >= 0
             }));
-
-            if (isDataLoading) {
-                return (
-                    <div className="text-center py-20">
-                        <Icon name="loader-2" size={48} className="text-primary-dark animate-spin mx-auto mb-4" />
-                        <p className="text-gray-600">Carregando dados da planilha...</p>
-                    </div>
-                );
-            }
             
             return (
                 <div className="space-y-6">
@@ -462,12 +448,9 @@
             // --- Estado de Autenticação e Dados ---
             const [user, setUser] = useState(null);
             const [isAuthReady, setIsAuthReady] = useState(false);
-            const [isDataLoading, setIsDataLoading] = useState(true); // NOVO: Estado de carregamento dos dados
             
-            // ID de acesso compartilhado: Puxa do localStorage ou usa o padrão
-            const [sharedAccessId, setSharedAccessId] = useState(
-                localStorage.getItem('minhas_financas_shared_id') || 'grupo_principal'
-            ); 
+            // NOVO: ID de acesso compartilhado. Troque 'grupo_principal' pelo ID que você quer usar por padrão.
+            const [sharedAccessId, setSharedAccessId] = useState('grupo_principal'); 
 
             const [dividas, setDividas] = useState([]);
             const [recebimentos, setRecebimentos] = useState([]); 
@@ -484,7 +467,8 @@
                 tipo: 'divida'
             });
 
-            // 1. Definição Dinâmica da Referência do Firestore
+            // 1. Definição Dinâmica da Referência do Firestore (AGORA COMPARTILHADA)
+            // Usa a coleção 'shared_finances' e o ID de acesso
             const USER_DOC_REF = user 
                 ? db.collection("shared_finances").doc(sharedAccessId) 
                 : null;
@@ -499,7 +483,7 @@
                 return () => unsubscribeAuth();
             }, []);
 
-            // 🚀 EFEITO 2: Listener do Firestore (Carrega os dados)
+            // 🚀 EFEITO 2: Listener do Firestore (Carrega os dados SOMENTE se o usuário estiver logado E o sharedAccessId mudar)
             useEffect(() => {
                 if (!user || !USER_DOC_REF) {
                     // Limpa os dados se deslogado ou se a referência não estiver pronta
@@ -507,12 +491,9 @@
                     setRecebimentos([]);
                     setPagamentos({});
                     setRecebimentoStatus({});
-                    setIsDataLoading(false); // Define como não carregando após limpar os dados
                     return; 
                 }
 
-                setIsDataLoading(true); // Começa a carregar
-                
                 // Carrega os dados do documento específico deste grupo
                 const unsubscribeData = USER_DOC_REF.onSnapshot(doc => {
                     if (doc.exists) {
@@ -526,11 +507,8 @@
                         saveDataToFirebase(USER_DOC_REF, [], [], {}, {});
                     }
                     lucide.createIcons();
-                    setIsDataLoading(false); // Termina de carregar com sucesso
                 }, (error) => {
                     console.error("Erro ao carregar dados do Firebase:", error);
-                    alert("ERRO CRÍTICO: Não foi possível carregar os dados. Verifique as Regras de Segurança do Firestore ou a conexão.");
-                    setIsDataLoading(false); // Termina de carregar com erro
                 });
                 
                 return () => unsubscribeData();
@@ -622,11 +600,9 @@
                 }
             }, [dividas, recebimentos, pagamentos, recebimentoStatus, USER_DOC_REF]);
             
-            // --- CÓDIGOS DE CÁLCULO ---
+            // --- CÓDIGOS DE CÁLCULO (Permanece o mesmo) ---
 
             const movimentacoesDoMes = useMemo(() => {
-                if (isDataLoading) return { itens: [], totalDespesasPagas: 0, totalDespesasPendentes: 0, totalReceitasPagas: 0, totalReceitasPendentes: 0, saldo: 0 };
-                
                 const mesAtual = viewDate.getMonth() + 1;
                 const anoAtual = viewDate.getFullYear();
                 
@@ -662,12 +638,10 @@
                 
                 const saldo = (totalReceitasPagas + totalReceitasPendentes) - (totalDespesasPagas + totalDespesasPendentes);
                 return { itens: lista.sort((a, b) => a.dia - b.dia), totalDespesasPagas, totalDespesasPendentes, totalReceitasPagas, totalReceitasPendentes, saldo };
-            }, [dividas, recebimentos, pagamentos, recebimentoStatus, viewDate, isDataLoading]);
+            }, [dividas, recebimentos, pagamentos, recebimentoStatus, viewDate]);
 
 
             const lifetimeMovimentacoes = useMemo(() => {
-                if (isDataLoading) return { totalRealizado: 0, allMovimentacoes: [] };
-                
                 const today = new Date();
                 const currentMonth = today.getMonth() + 1;
                 const currentYear = today.getFullYear();
@@ -711,7 +685,7 @@
 
                 return { totalRealizado, allMovimentacoes };
 
-            }, [dividas, recebimentos, pagamentos, recebimentoStatus, isDataLoading]);
+            }, [dividas, recebimentos, pagamentos, recebimentoStatus]);
 
 
             const { itens, totalDespesasPagas, totalDespesasPendentes, totalReceitasPagas, totalReceitasPendentes, saldo } = movimentacoesDoMes;
@@ -871,17 +845,6 @@
             }
 
 
-            // Renderização da Tela de Carregamento de Dados (Após Login)
-            if (isDataLoading) {
-                 return (
-                    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
-                        <Icon name="loader-2" size={48} className="text-primary-dark animate-spin mb-4" />
-                        <p className="text-gray-600">Carregando dados financeiros de {sharedAccessId}...</p>
-                    </div>
-                );
-            }
-
-
             // --- Renderização Principal (Navbar e Roteamento) ---
             return (
                 <div className="min-h-screen pb-20">
@@ -919,7 +882,7 @@
                             {/* 🗓 Botões de Ação Específicos da View */}
                             <div className="flex items-center gap-4">
                                 
-                                {/* Configuração do ID de Acesso */}
+                                {/* NOVO: Configuração do ID de Acesso */}
                                 <SharedIdInput sharedAccessId={sharedAccessId} setSharedAccessId={setSharedAccessId} />
 
                                 {view === 'calendario' ? (
@@ -951,7 +914,6 @@
                                 movimentacoes={lifetimeMovimentacoes} 
                                 excluirDivida={excluirDivida} 
                                 toggleStatus={toggleStatus}
-                                isDataLoading={isDataLoading}
                             />
                         </main>
                     )}
