@@ -5,14 +5,14 @@
     width: 4px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: #1A82D9;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: #1A82D9;
     border-radius: 4px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    background: #1A82D9;
 }
 
 /* PLANO DE FUNDO DO CORPO DA PÁGINA (CORRIDA PARA #2E3F42) */
