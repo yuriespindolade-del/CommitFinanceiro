@@ -15,9 +15,9 @@
     background: #94a3b8;
 }
 
-/* PLANO DE FUNDO DO CORPO DA PÁGINA */
+/* PLANO DE FUNDO DO CORPO DA PÁGINA (CORRIDA PARA #2E3F42) */
 body {
-    background-color: ##2E3F42; 
+    background-color: #2E3F42; 
 }
 
 /* TRANSIÇÃO PARA BARRAS DO GRÁFICO */
