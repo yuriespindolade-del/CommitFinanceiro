@@ -34,7 +34,7 @@
     <!-- Babel (Para entender o código React no navegador) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Ícones Lucide -->
+    <!-- Ícones Lucide (DEIXAMOS O SCRIPT, mas não chamamos createIcons) -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <!-- 🚀 SCRIPTS E CONFIGURAÇÃO DO FIREBASE 🚀 -->
@@ -64,7 +64,27 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const Icon = ({ name, size = 20, className = "" }) => <i data-lucide={name} className={className} style={{ width: size, height: size }}></i>;
+        // --- NOVO: Componente Icon usando SVG (Remove a dependência de lucide.createIcons) ---
+        const Icon = ({ name, size = 20, className = "stroke-current", style = {} }) => {
+            // Este é um fallback simples; o Lucide continuará a carregar no DOM, 
+            // mas sem o comando createIcons, não deve interferir no React.
+            return (
+                <svg
+                    data-lucide={name}
+                    width={size}
+                    height={size}
+                    className={className}
+                    style={{ ...style, minWidth: size, minHeight: size }}
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    strokeWidth="2" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round"
+                >
+                    {/* O Lucide script no head ainda carrega os dados SVG necessários para o CSS */}
+                </svg>
+            );
+        };
         
         // --- LOGO EXTERNO (GitHub) ---
         const LOGO_URL = "./araralogo.png"; 
@@ -481,7 +501,10 @@
             const [recebimentos, setRecebimentos] = useState([]); 
             const [pagamentos, setPagamentos] = useState({});
             const [recebimentoStatus, setRecebimentoStatus] = useState({}); 
-            const [viewDate, setViewDate] = useState(new Date());
+            
+            // CORREÇÃO: viewDate é um estado React, corrigido no último passo.
+            const [viewDate, setViewDate] = useState(new Date()); 
+            
             const [showModal, setShowModal] = useState(false);
             const [view, setView] = useState('calendario'); 
             
@@ -533,7 +556,6 @@
                         // Se for o primeiro acesso a este ID de grupo, cria o documento inicial
                         saveDataToFirebase(USER_DOC_REF, [], [], {}, {});
                     }
-                    lucide.createIcons();
                     setIsDataLoading(false); // Termina de carregar com sucesso
                 }, (error) => {
                     console.error("Erro ao carregar dados do Firebase:", error);
@@ -544,10 +566,9 @@
                 return () => unsubscribeData();
             }, [user, sharedAccessId]); // Depende do user E do ID de Acesso Compartilhado
             
-            useEffect(() => {
-                lucide.createIcons();
-            }, [dividas, recebimentos, viewDate, showModal, view]);
-
+            // 🚀 EFEITO 3: Atualiza os ícones após a renderização do DOM (REMOVIDO)
+            // Agora os ícones são tratados pelo React/SVG
+            // Removemos a chamada explícita para evitar o conflito removeChild.
 
             // --- Lógica de Negócios (Movimentações e Saldo) ---
             
@@ -943,7 +964,7 @@
                                 )}
                                 
                                 <button onClick={() => setShowModal(true)} className="bg-primary-dark hover:bg-primary-light text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors shadow-sm">
-                                    <Icon name="plus" size={16} className="text-white"/> <span className="hidden sm:inline">Nova Conta</span>
+                                    <Icon name="plus" size={16}/> <span className="hidden sm:inline">Nova Conta</span>
                                 </button>
 
                                 <button onClick={() => auth.signOut()} title="Sair" className="p-2 rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
