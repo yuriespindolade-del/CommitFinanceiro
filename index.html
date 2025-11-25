@@ -34,9 +34,6 @@
     <!-- Babel (Para entender o código React no navegador) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Ícones Lucide (DEIXAMOS O SCRIPT, mas não chamamos createIcons) -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-
     <!-- 🚀 SCRIPTS E CONFIGURAÇÃO DO FIREBASE 🚀 -->
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
@@ -64,13 +61,30 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // --- NOVO: Componente Icon usando SVG (Remove a dependência de lucide.createIcons) ---
+        // --- MAPA DE ÍCONES SVG EMBUTIDOS (Versão Simples) ---
+        const SVG_ICONS = {
+            "users": `<circle cx="12" cy="8" r="5" /><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />`,
+            "pencil": `<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />`,
+            "loader-2": `<path d="M21 12a9 9 0 1 1-6.219-8.56" />`,
+            "calendar": `<rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><path d="M16 2L16 6M8 2L8 6M3 10L21 10" />`,
+            "layout-list": `<rect x="3" y="10" width="18" height="4" rx="1" /><rect x="3" y="3" width="18" height="4" rx="1" /><rect x="3" y="17" width="18" height="4" rx="1" />`,
+            "plus": `<path d="M12 5L12 19M5 12L19 12" />`,
+            "log-out": `<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12L9 12" />`,
+            "chevron-left": `<path d="M15 18l-6-6 6-6" />`,
+            "chevron-right": `<path d="M9 18l6-6-6-6" />`,
+            "check-circle": `<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3" />`,
+            "circle": `<circle cx="12" cy="12" r="10" />`,
+            "minus-circle": `<circle cx="12" cy="12" r="10" /><path d="M8 12L16 12" />`,
+            "trash-2": `<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" />`,
+        };
+
+        // --- Componente Icon Renderizando SVG Inline ---
         const Icon = ({ name, size = 20, className = "stroke-current", style = {} }) => {
-            // Este é um fallback simples; o Lucide continuará a carregar no DOM, 
-            // mas sem o comando createIcons, não deve interferir no React.
+            const svgContent = SVG_ICONS[name];
+            if (!svgContent) return null; // Retorna nulo se o ícone não for encontrado
+
             return (
                 <svg
-                    data-lucide={name}
                     width={size}
                     height={size}
                     className={className}
@@ -80,9 +94,8 @@
                     strokeWidth="2" 
                     strokeLinecap="round" 
                     strokeLinejoin="round"
-                >
-                    {/* O Lucide script no head ainda carrega os dados SVG necessários para o CSS */}
-                </svg>
+                    dangerouslySetInnerHTML={{ __html: svgContent }}
+                />
             );
         };
         
@@ -114,6 +127,43 @@
             });
         };
 
+        // --- Componente para Confirmação de Exclusão (Customizado) ---
+        const ConfirmModal = ({ isOpen, onClose, onConfirm, item }) => {
+            if (!isOpen || !item) return null;
+            
+            const typeText = item.tipo === 'divida' ? 'despesa' : 'receita';
+            
+            return (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+                        <div className="p-6">
+                            <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2 text-red-600">
+                                <Icon name="trash-2" size={20}/>
+                                Confirmar Exclusão
+                            </h3>
+                            <p className="mt-4 text-gray-600">
+                                Você tem certeza que deseja excluir esta {typeText} e todo o seu histórico de parcelas?
+                            </p>
+                        </div>
+                        <div className="flex justify-end gap-3 p-4 bg-gray-50 border-t">
+                            <button 
+                                onClick={onClose} 
+                                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">
+                                Cancelar
+                            </button>
+                            <button 
+                                onClick={onConfirm} 
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                                Sim, Excluir
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+        // --- FIM ConfirmModal ---
+
+
         // --- Componente para Configurar o ID do Grupo Compartilhado ---
         const SharedIdInput = ({ sharedAccessId, setSharedAccessId }) => {
             const [newId, setNewId] = useState(sharedAccessId);
@@ -133,13 +183,13 @@
             };
 
             return (
-                <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-full border border-gray-200">
                     <Icon name="users" size={16} className="text-gray-500"/>
                     {!isEditing ? (
                         <>
                             <span className="text-xs font-medium text-gray-700 truncate">Grupo: <span className="text-primary-dark font-bold">{sharedAccessId}</span></span>
-                            <button onClick={() => setIsEditing(true)} className="text-gray-400 hover:text-primary-dark">
-                                <Icon name="pencil" size={14}/>
+                            <button onClick={() => setIsEditing(true)} className="text-gray-400 hover:text-primary-dark p-1">
+                                <Icon name="pencil" size={14} className="text-gray-500"/>
                             </button>
                         </>
                     ) : (
@@ -151,7 +201,7 @@
                                 placeholder="ID do Grupo"
                                 className="px-1 py-0.5 text-xs border rounded w-32 focus:outline-none focus:border-primary-light"
                             />
-                            <button type="submit" className="text-white bg-primary-dark hover:bg-primary-light px-2 py-0.5 rounded text-xs">Salvar</button>
+                            <button type="submit" className="text-white bg-primary-light hover:bg-primary-dark px-2 py-0.5 rounded text-xs">Salvar</button>
                         </form>
                     )}
                 </div>
@@ -260,13 +310,17 @@
                 </div>
             );
         };
-
+        
         // --- COMPONENTE: PlanilhaView (Nova Tela) ---
         const PlanilhaView = ({ movimentacoes, excluirDivida, toggleStatus, isDataLoading }) => {
-            
+
+            // Estado para gerenciar as abas internas (Tabela ou Setores)
+            const [innerView, setInnerView] = useState('tabela'); 
+
             // 1. Calcular Saldo Acumulado Mês a Mês para o Gráfico
             const chartData = useMemo(() => {
-                if(isDataLoading) return { chartArray: [], maxAbsValue: 0 }; // Evita cálculo desnecessário
+                if(isDataLoading) return { chartArray: [], maxAbsValue: 0 }; 
+                // ... (Logic for chartData remains the same)
                 
                 const today = new Date();
                 const currentMonthIndex = today.getMonth() + 1;
@@ -360,6 +414,83 @@
                 );
             }
             
+            // Componente Tabela Detalhada
+            const TabelaDetalhada = () => (
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200"><h2 className="font-semibold text-gray-700">Histórico Completo</h2></div>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mês/Ano</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parcela</th>
+                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {tableItems.length === 0 ? (
+                                    <tr><td colSpan="7" className="px-6 py-4 text-center text-gray-500">Nenhuma movimentação registrada.</td></tr>
+                                ) : (
+                                    tableItems.map((item) => {
+                                        const isReceita = item.tipo === 'recebimento';
+                                        const isPago = item.estaPago;
+                                        const statusText = isReceita ? (isPago ? 'Recebido' : 'A Receber') : (isPago ? 'Pago' : 'A Pagar');
+                                        const statusColor = isReceita ? (isPago ? 'text-green-600' : 'text-accent-yellow') : (isPago ? 'text-gray-500' : 'text-red-600');
+                                        const rowClass = isReceita ? 'hover:bg-green-50/50' : 'hover:bg-red-50/50';
+
+                                        return (
+                                            <tr key={`${item.chaveStatus}-${item.id}`} className={rowClass}>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                                                    {item.dia}/{item.parcelaMes}/{item.parcelaAno}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${isReceita ? 'bg-primary-dark/10 text-primary-dark' : 'bg-gray-100 text-gray-800'}`}>
+                                                        {isReceita ? 'RECEITA' : 'DESPESA'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{item.nome}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.parcelaAtual}/{item.parcelas}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right" style={{ color: isReceita ? '#10B981' : '#EF4444' }}>
+                                                    {isReceita ? '+' : '-'} R$ {Number(item.valor).toFixed(2)}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                                                    <span className={`font-medium ${statusColor}`}>{statusText}</span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium flex gap-2 justify-center">
+                                                    <button 
+                                                        onClick={() => toggleStatus(item.chaveStatus, item.tipo)}
+                                                        title={`Marcar como ${isPago ? 'PENDENTE' : (isReceita ? 'RECEBIDO' : 'PAGO')}`}
+                                                        className={`text-gray-400 hover:text-primary-light`}>
+                                                        <Icon name={isPago ? "minus-circle" : "check-circle"} size={16}/>
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => excluirDivida(item.id, item.tipo)}
+                                                        title="Excluir Conta"
+                                                        className="text-gray-400 hover:text-red-500">
+                                                        {/* CORREÇÃO APLICADA: Cor do ícone de lixeira no item */}
+                                                        <Icon name="trash-2" size={16} className="text-red-500 hover:text-red-700"/>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+            
+            // SetoresView agora é um placeholder, pois a funcionalidade foi removida.
+            const SetoresView = () => (
+                 <div className="text-center py-10 text-gray-500">A funcionalidade de Análise (Tags/Setores) foi removida a pedido.</div>
+            );
+
+
             return (
                 <div className="space-y-6">
                     {/* Saldo Atual (Caixa) */}
@@ -413,73 +544,23 @@
                     </div>
 
 
-                    {/* Tabela Detalhada */}
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200"><h2 className="font-semibold text-gray-700">Tabela de Movimentações (Histórico)</h2></div>
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mês/Ano</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parcela</th>
-                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
-                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white divide-y divide-gray-200">
-                                    {tableItems.length === 0 ? (
-                                        <tr><td colSpan="7" className="px-6 py-4 text-center text-gray-500">Nenhuma movimentação registrada.</td></tr>
-                                    ) : (
-                                        tableItems.map((item) => {
-                                            const isReceita = item.tipo === 'recebimento';
-                                            const isPago = item.estaPago;
-                                            const statusText = isReceita ? (isPago ? 'Recebido' : 'A Receber') : (isPago ? 'Pago' : 'A Pagar');
-                                            const statusColor = isReceita ? (isPago ? 'text-green-600' : 'text-accent-yellow') : (isPago ? 'text-gray-500' : 'text-red-600');
-                                            const rowClass = isReceita ? 'hover:bg-green-50/50' : 'hover:bg-red-50/50';
-
-                                            return (
-                                                <tr key={`${item.chaveStatus}-${item.id}`} className={rowClass}>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                                                        {item.dia}/{item.parcelaMes}/{item.parcelaAno}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${isReceita ? 'bg-primary-dark/10 text-primary-dark' : 'bg-gray-100 text-gray-800'}`}>
-                                                            {isReceita ? 'RECEITA' : 'DESPESA'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{item.nome}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.parcelaAtual}/{item.parcelas}</td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right" style={{ color: isReceita ? '#10B981' : '#EF4444' }}>
-                                                        {isReceita ? '+' : '-'} R$ {Number(item.valor).toFixed(2)}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                                                        <span className={`font-medium ${statusColor}`}>{statusText}</span>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium flex gap-2 justify-center">
-                                                        <button 
-                                                            onClick={() => toggleStatus(item.chaveStatus, item.tipo)}
-                                                            title={`Marcar como ${isPago ? 'PENDENTE' : (isReceita ? 'RECEBIDO' : 'PAGO')}`}
-                                                            className={`text-gray-400 hover:text-primary-light`}>
-                                                            <Icon name={isPago ? "minus-circle" : "check-circle"} size={16}/>
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => excluirDivida(item.id, item.tipo)}
-                                                            title="Excluir Conta"
-                                                            className="text-gray-400 hover:text-red-500">
-                                                            <Icon name="trash-2" size={16}/>
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
+                    {/* Nav Tabs dentro de Planilha */}
+                    <div className="flex bg-gray-100 p-1 rounded-xl">
+                        <button 
+                            onClick={() => setInnerView('tabela')}
+                            className={`flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${innerView === 'tabela' ? 'bg-primary-dark text-white shadow-sm' : 'text-gray-600 hover:bg-white'}`}>
+                            Histórico (Tabela)
+                        </button>
+                        <button 
+                            onClick={() => setInnerView('setores')}
+                            className={`flex-1 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${innerView === 'setores' ? 'bg-primary-dark text-white shadow-sm' : 'text-gray-600 hover:bg-white'}`}>
+                            Análise (Removida)
+                        </button>
                     </div>
+
+                    {/* Conteúdo da Aba */}
+                    {innerView === 'tabela' && <TabelaDetalhada />}
+                    {innerView === 'setores' && <SetoresView />}
 
                 </div>
             );
@@ -490,7 +571,7 @@
             // --- Estado de Autenticação e Dados ---
             const [user, setUser] = useState(null);
             const [isAuthReady, setIsAuthReady] = useState(false);
-            const [isDataLoading, setIsDataLoading] = useState(true); // NOVO: Estado de carregamento dos dados
+            const [isDataLoading, setIsDataLoading] = useState(true); 
             
             // ID de acesso compartilhado: Puxa do localStorage ou usa o padrão
             const [sharedAccessId, setSharedAccessId] = useState(
@@ -502,17 +583,21 @@
             const [pagamentos, setPagamentos] = useState({});
             const [recebimentoStatus, setRecebimentoStatus] = useState({}); 
             
-            // CORREÇÃO: viewDate é um estado React, corrigido no último passo.
+            // viewDate é um estado React, corrigido.
             const [viewDate, setViewDate] = useState(new Date()); 
             
             const [showModal, setShowModal] = useState(false);
             const [view, setView] = useState('calendario'); 
             
+            // Estados para o Modal de Confirmação (DELEÇÃO)
+            const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+            const [itemToDelete, setItemToDelete] = useState(null); 
+
             const [newConta, setNewConta] = useState({
                 nome: '', valor: '', dia: '', parcelas: '1',
                 mesInicio: new Date().getMonth() + 1,
                 anoInicio: new Date().getFullYear(),
-                tipo: 'divida'
+                tipo: 'divida',
             });
 
             // 1. Definição Dinâmica da Referência do Firestore
@@ -533,18 +618,16 @@
             // 🚀 EFEITO 2: Listener do Firestore (Carrega os dados)
             useEffect(() => {
                 if (!user || !USER_DOC_REF) {
-                    // Limpa os dados se deslogado ou se a referência não estiver pronta
                     setDividas([]);
                     setRecebimentos([]);
                     setPagamentos({});
                     setRecebimentoStatus({});
-                    setIsDataLoading(false); // Define como não carregando após limpar os dados
+                    setIsDataLoading(false);
                     return; 
                 }
 
-                setIsDataLoading(true); // Começa a carregar
+                setIsDataLoading(true); 
                 
-                // Carrega os dados do documento específico deste grupo
                 const unsubscribeData = USER_DOC_REF.onSnapshot(doc => {
                     if (doc.exists) {
                         const data = doc.data();
@@ -553,26 +636,20 @@
                         setPagamentos(data.pagamentos || {});
                         setRecebimentoStatus(data.recebimentoStatus || {});
                     } else {
-                        // Se for o primeiro acesso a este ID de grupo, cria o documento inicial
                         saveDataToFirebase(USER_DOC_REF, [], [], {}, {});
                     }
-                    setIsDataLoading(false); // Termina de carregar com sucesso
+                    setIsDataLoading(false); 
                 }, (error) => {
                     console.error("Erro ao carregar dados do Firebase:", error);
                     alert("ERRO CRÍTICO: Não foi possível carregar os dados. Verifique as Regras de Segurança do Firestore ou a conexão.");
-                    setIsDataLoading(false); // Termina de carregar com erro
+                    setIsDataLoading(false); 
                 });
                 
                 return () => unsubscribeData();
-            }, [user, sharedAccessId]); // Depende do user E do ID de Acesso Compartilhado
+            }, [user, sharedAccessId]); 
             
-            // 🚀 EFEITO 3: Atualiza os ícones após a renderização do DOM (REMOVIDO)
-            // Agora os ícones são tratados pelo React/SVG
-            // Removemos a chamada explícita para evitar o conflito removeChild.
-
             // --- Lógica de Negócios (Movimentações e Saldo) ---
             
-            // Funções de Ação (Adaptadas para usar USER_DOC_REF)
             const changeMonth = useCallback((offset) => {
                 const newDate = new Date(viewDate);
                 newDate.setMonth(newDate.getMonth() + offset);
@@ -600,6 +677,39 @@
                     });
                 }
             }, [dividas, recebimentos, pagamentos, recebimentoStatus, USER_DOC_REF]);
+
+            const handleDeleteConfirm = useCallback(() => {
+                if (!itemToDelete || !USER_DOC_REF) return;
+
+                const { id, tipo } = itemToDelete;
+                
+                let newDividas = dividas;
+                let newRecebimentos = recebimentos;
+                
+                if (tipo === 'divida') {
+                    newDividas = dividas.filter(d => d.id !== id);
+                    setDividas(newDividas);
+                } else {
+                    newRecebimentos = recebimentos.filter(r => r.id !== id);
+                    setRecebimentos(newRecebimentos);
+                }
+                
+                saveDataToFirebase(USER_DOC_REF, newDividas, newRecebimentos, pagamentos, recebimentoStatus);
+                
+                // Fechar modal após a ação
+                setIsConfirmModalOpen(false);
+                setItemToDelete(null);
+
+            }, [dividas, recebimentos, pagamentos, recebimentoStatus, itemToDelete, USER_DOC_REF]);
+
+
+            // NOVA LÓGICA: Abre o modal de confirmação
+            const excluirDivida = useCallback((id, tipo) => {
+                setItemToDelete({ id, tipo });
+                setIsConfirmModalOpen(true);
+            }, []);
+            // FIM NOVA LÓGICA
+
 
             const handleAddConta = useCallback((e) => {
                 e.preventDefault();
@@ -631,25 +741,6 @@
                 setShowModal(false);
                 setNewConta({ nome: '', valor: '', dia: '', parcelas: '1', mesInicio: new Date().getMonth() + 1, anoInicio: new Date().getFullYear(), tipo: 'divida' });
             }, [dividas, recebimentos, pagamentos, recebimentoStatus, newConta, USER_DOC_REF]);
-
-            const excluirDivida = useCallback((id, tipo) => {
-                if (!USER_DOC_REF) return;
-                
-                if (window.confirm(`Deseja realmente excluir este(a) ${tipo === 'divida' ? 'despesa' : 'receita'} e todo o histórico?`)) {
-                    let newDividas = dividas;
-                    let newRecebimentos = recebimentos;
-                    
-                    if (tipo === 'divida') {
-                        newDividas = dividas.filter(d => d.id !== id);
-                        setDividas(newDividas);
-                    } else {
-                        newRecebimentos = recebimentos.filter(r => r.id !== id);
-                        setRecebimentos(newRecebimentos);
-                    }
-                    
-                    saveDataToFirebase(USER_DOC_REF, newDividas, newRecebimentos, pagamentos, recebimentoStatus);
-                }
-            }, [dividas, recebimentos, pagamentos, recebimentoStatus, USER_DOC_REF]);
             
             // --- CÓDIGOS DE CÁLCULO ---
 
@@ -723,7 +814,7 @@
                             allMovimentacoes.push({
                                 ...item, tipo: type, valor: item.valor, parcelaAtual: i + 1,
                                 parcelaAno: parcelYear, parcelaMes: parcelMonth, chaveStatus: statusKey,
-                                estaPago: isStatusSet, isDue
+                                estaPago: isStatusSet, isDue, 
                             });
                         }
                     });
@@ -785,7 +876,7 @@
                                             onClick={() => toggleStatus(conta.chaveStatus, conta.tipo)}
                                             className={`text-[10px] px-1 py-0.5 rounded border truncate cursor-pointer select-none ${statusClass}`}
                                             title={`${isReceita ? 'Receita' : 'Despesa'} ${conta.nome} - R$ ${conta.valor}`}>
-                                            {conta.nome}
+                                            {conta.nome} 
                                         </div>
                                     );
                                 })}
@@ -871,7 +962,9 @@
                                                     <span>Dia {conta.dia} ({statusText})</span>
                                                     <div className="flex items-center gap-2">
                                                         <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{conta.parcelaAtual}/{conta.parcelas}</span>
-                                                        <button onClick={() => excluirDivida(conta.id, conta.tipo)} className="text-gray-300 hover:text-red-500"><Icon name="trash-2" size={14}/></button>
+                                                        <button onClick={() => excluirDivida(conta.id, conta.tipo)} className="text-gray-400 hover:text-red-500">
+                                                            <Icon name="trash-2" size={14} className="text-red-500 hover:text-red-700"/>
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -930,7 +1023,8 @@
                                     />
                                     {/* FIM LOGO */}
                                 </div>
-                                <h1 className="font-bold text-xl tracking-tight hidden sm:block text-slate-800">Sistema Financeiro <span className="text-primary-dark">Commit JR</span></h1>
+                                {/* CORREÇÃO: Alinhamento de texto e nome da aplicação */}
+                                <h1 className="font-bold text-xl tracking-tight text-slate-800">Sistema Financeiro <span className="text-primary-dark">Commit JR</span></h1>
                             </div>
 
                             {/* 🔄 Navegação Principal */}
@@ -950,14 +1044,19 @@
                             {/* 🗓 Botões de Ação Específicos da View */}
                             <div className="flex items-center gap-4">
                                 
-                                {/* Configuração do ID de Acesso */}
+                                {/* Configuração do ID de Acesso (Botão de alterar grupo) */}
                                 <SharedIdInput sharedAccessId={sharedAccessId} setSharedAccessId={setSharedAccessId} />
 
                                 {view === 'calendario' ? (
                                     <div className="flex items-center gap-4 bg-gray-100 rounded-full p-1 pr-4 hidden md:flex">
-                                        <button onClick={() => changeMonth(-1)} className="p-1.5 hover:bg-white rounded-full shadow-sm"><Icon name="chevron-left" className="text-gray-600"/></button>
+                                        {/* CORREÇÃO: Botões de navegação do mês ativos e coloridos */}
+                                        <button onClick={() => changeMonth(-1)} className="p-1.5 hover:bg-white rounded-full shadow-sm text-primary-dark hover:text-primary-light">
+                                            <Icon name="chevron-left" className="w-4 h-4"/>
+                                        </button>
                                         <span className="font-semibold w-32 text-center text-sm text-gray-700">{viewDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase()}</span>
-                                        <button onClick={() => changeMonth(1)} className="p-1.5 hover:bg-white rounded-full shadow-sm"><Icon name="chevron-right" className="text-gray-600"/></button>
+                                        <button onClick={() => changeMonth(1)} className="p-1.5 hover:bg-white rounded-full shadow-sm text-primary-dark hover:text-primary-light">
+                                            <Icon name="chevron-right" className="w-4 h-4"/>
+                                        </button>
                                     </div>
                                 ) : (
                                     <div className="w-16 hidden md:block"></div>
@@ -967,7 +1066,8 @@
                                     <Icon name="plus" size={16}/> <span className="hidden sm:inline">Nova Conta</span>
                                 </button>
 
-                                <button onClick={() => auth.signOut()} title="Sair" className="p-2 rounded-full text-gray-500 hover:bg-gray-100 transition-colors">
+                                {/* CORREÇÃO: Botão de Sair com cor discreta e hover de alerta */}
+                                <button onClick={() => auth.signOut()} title="Sair" className="p-2 rounded-full text-gray-500 hover:bg-red-500 hover:text-white transition-colors border border-gray-200">
                                     <Icon name="log-out" size={20}/>
                                 </button>
                             </div>
@@ -1007,6 +1107,8 @@
                                     
                                     <div><label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label><input required className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-primary-light" value={newConta.nome} onChange={e => setNewConta({...newConta, nome: e.target.value})} placeholder="Ex: Internet ou Salário"/></div>
                                     
+                                    {/* CAMPO DE TAG FOI REMOVIDO */}
+                                    
                                     <div className="grid grid-cols-2 gap-4">
                                         <div><label className="block text-sm font-medium text-gray-700 mb-1">Valor</label><input required type="number" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-primary-light" value={newConta.valor} onChange={e => setNewConta({...newConta, valor: e.target.value})}/></div>
                                         <div><label className="block text-sm font-medium text-gray-700 mb-1">Dia</label><input required type="number" min="1" max="31" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-primary-light" value={newConta.dia} onChange={e => setNewConta({...newConta, dia: e.target.value})}/></div>
@@ -1024,6 +1126,15 @@
                             </div>
                         </div>
                     )}
+
+                    {/* Modal de Confirmação de Exclusão */}
+                    <ConfirmModal 
+                        isOpen={isConfirmModalOpen}
+                        onClose={() => setIsConfirmModalOpen(false)}
+                        onConfirm={handleDeleteConfirm}
+                        item={itemToDelete}
+                    />
+
                 </div>
             );
         }
