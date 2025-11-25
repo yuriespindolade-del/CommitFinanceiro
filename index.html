@@ -79,6 +79,7 @@
             "circle": `<circle cx="12" cy="12" r="10" />`,
             "minus-circle": `<circle cx="12" cy="12" r="10" /><path d="M8 12L16 12" />`,
             "trash-2": `<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6" />`,
+            "receipt": `<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1zM8 12h8m-8 4h8" />`,
         };
 
         // --- Componente Icon Renderizando SVG Inline ---
@@ -115,6 +116,13 @@
             const date = new Date(2000, month - 1, 1);
             return date.toLocaleDateString('pt-BR', { month: 'short' }).toUpperCase();
         };
+        const formatDateForInput = (date) => {
+            const d = new Date(date);
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const year = d.getFullYear();
+            return `${year}-${month}-${day}`;
+        };
 
         // Função para salvar dados no documento GLOBAL
         const saveDataToFirebase = (userRef, newDividas, newRecebimentos, newPagamentos, newRecebimentoStatus) => {
@@ -129,7 +137,88 @@
             });
         };
 
-        // --- Componente para Confirmação de Exclusão (Customizado) ---
+        // --- Componente para Modal de Detalhe/Pagamento (NOVO) ---
+        const PaymentModal = ({ isOpen, onClose, onConfirm, item, toggleStatus }) => {
+            if (!isOpen || !item) return null;
+            
+            const isReceita = item.tipo === 'recebimento';
+            const statusLabel = isReceita ? 'Recebimento' : 'Pagamento';
+
+            const [paymentData, setPaymentData] = useState({
+                dataPagamento: formatDateForInput(new Date()),
+                comprovanteURL: '',
+            });
+
+            const handleConfirmPayment = (e) => {
+                e.preventDefault();
+                // 1. Marca o status como PAGO/RECEBIDO
+                toggleStatus(item.chaveStatus, item.tipo); 
+
+                // 2. Aqui você enviaria 'paymentData' ao Firestore para salvar data/comprovante
+                // Como não estamos armazenando data/comprovante por parcela, vamos simular o log:
+                console.log(`Detalhes de ${statusLabel} para ${item.nome} (${item.chaveStatus}):`, paymentData);
+
+                onClose();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+                        <div className="p-6">
+                            <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
+                                <Icon name={isReceita ? "check-circle" : "minus-circle"} size={20}/>
+                                Confirmar {statusLabel}
+                            </h3>
+                            <p className="mt-2 text-sm text-gray-600">
+                                Confirme o {statusLabel.toLowerCase()} para **{item.nome}** (R$ {Number(item.valor).toFixed(2)}, Parcela {item.parcelaAtual}/{item.parcelas}).
+                            </p>
+                            
+                            <form onSubmit={handleConfirmPayment} className="mt-4 space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Data Real do {statusLabel}</label>
+                                    <input 
+                                        type="date"
+                                        required
+                                        value={paymentData.dataPagamento} 
+                                        onChange={e => setPaymentData({...paymentData, dataPagamento: e.target.value})}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-primary-light"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">Comprovante (URL opcional) <Icon name="receipt" size={16}/></label>
+                                    <input 
+                                        type="url"
+                                        placeholder="Link do comprovante ou arquivo"
+                                        value={paymentData.comprovanteURL} 
+                                        onChange={e => setPaymentData({...paymentData, comprovanteURL: e.target.value})}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-primary-light"
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">Este campo é apenas para registro no momento.</p>
+                                </div>
+                                
+                                <div className="flex justify-end gap-3 pt-4 border-t">
+                                    <button 
+                                        type="button"
+                                        onClick={onClose} 
+                                        className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100">
+                                        Cancelar
+                                    </button>
+                                    <button 
+                                        type="submit"
+                                        className={`px-4 py-2 text-white rounded-lg font-bold ${isReceita ? 'bg-green-600 hover:bg-green-700' : 'bg-primary-dark hover:bg-primary-light'}`}>
+                                        Confirmar {statusLabel}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+        // --- FIM PaymentModal ---
+
+
+        // --- Componente para Confirmação de Exclusão ---
         const ConfirmModal = ({ isOpen, onClose, onConfirm, item }) => {
             if (!isOpen || !item) return null;
             
@@ -145,6 +234,9 @@
                             </h3>
                             <p className="mt-4 text-gray-600">
                                 Você tem certeza que deseja excluir esta {typeText} e todo o seu histórico de parcelas?
+                            </p>
+                            <p className="mt-2 text-sm font-semibold text-gray-700">
+                                Item: {item.nome} (R$ {Number(item.valor).toFixed(2)})
                             </p>
                         </div>
                         <div className="flex justify-end gap-3 p-4 bg-gray-50 border-t">
@@ -169,7 +261,7 @@
         const AuthScreen = ({}) => {
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
-            const [rememberMe, setRememberMe] = useState(true); // NOVO: Estado para "Continuar Conectado"
+            const [rememberMe, setRememberMe] = useState(true); 
             const [error, setError] = useState('');
             const [isLoading, setIsLoading] = useState(false);
 
@@ -248,7 +340,7 @@
                                 />
                             </div>
 
-                            {/* NOVO: Checkbox Continuar Conectado */}
+                            {/* Checkbox Continuar Conectado */}
                             <div className="flex items-center">
                                 <input 
                                     id="rememberMe"
@@ -281,6 +373,7 @@
         
         // --- COMPONENTE: PlanilhaView (Nova Tela) ---
         const PlanilhaView = ({ movimentacoes, excluirDivida, toggleStatus, isDataLoading }) => {
+            // Reintroduzida prop excluirDivida e toggleStatus
 
             // Estado para gerenciar as abas internas (tabela é a única aba)
             const [innerView, setInnerView] = useState('tabela'); 
@@ -382,76 +475,81 @@
             }
             
             // Componente Tabela Detalhada
-            const TabelaDetalhada = () => (
-                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200"><h2 className="font-semibold text-gray-700">Histórico Completo</h2></div>
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mês/Ano</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parcela</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {tableItems.length === 0 ? (
-                                    <tr><td colSpan="7" className="px-6 py-4 text-center text-gray-500">Nenhuma movimentação registrada.</td></tr>
-                                ) : (
-                                    tableItems.map((item) => {
-                                        const isReceita = item.tipo === 'recebimento';
-                                        const isPago = item.estaPago;
-                                        const statusText = isReceita ? (isPago ? 'Recebido' : 'A Receber') : (isPago ? 'Pago' : 'A Pagar');
-                                        const statusColor = isReceita ? (isPago ? 'text-green-600' : 'text-accent-yellow') : (isPago ? 'text-gray-500' : 'text-red-600');
-                                        const rowClass = isReceita ? 'hover:bg-green-50/50' : 'hover:bg-red-50/50';
+            const TabelaDetalhada = () => {
+                // Obtenção da função toggleStatus de dentro do contexto App
+                const appProps = React.useContext(AppContext);
 
-                                        return (
-                                            <tr key={`${item.chaveStatus}-${item.id}`} className={rowClass}>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                                                    {item.dia}/{item.parcelaMes}/{item.parcelaAno}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${isReceita ? 'bg-primary-dark/10 text-primary-dark' : 'bg-gray-100 text-gray-800'}`}>
-                                                        {isReceita ? 'RECEITA' : 'DESPESA'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{item.nome}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.parcelaAtual}/{item.parcelas}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right" style={{ color: isReceita ? '#10B981' : '#EF4444' }}>
-                                                    {isReceita ? '+' : '-'} R$ {Number(item.valor).toFixed(2)}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                                                    <span className={`font-medium ${statusColor}`}>{statusText}</span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium flex gap-2 justify-center">
-                                                    <button 
-                                                        onClick={() => toggleStatus(item.chaveStatus, item.tipo)}
-                                                        title={`Marcar como ${isPago ? 'PENDENTE' : (isReceita ? 'RECEBIDO' : 'PAGO')}`}
-                                                        className={`text-gray-400 hover:text-primary-light`}>
-                                                        <Icon name={isPago ? "minus-circle" : "check-circle"} size={16}/>
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => excluirDivida(item.id, item.tipo)}
-                                                        title="Excluir Conta"
-                                                        className="btn-trash p-1 bg-red-100/70 hover:bg-red-200">
-                                                        <Icon name="trash-2" size={16} className="text-red-500 hover:text-red-700"/>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
-                                )}
-                            </tbody>
-                        </table>
+                return (
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200"><h2 className="font-semibold text-gray-700">Histórico Completo</h2></div>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mês/Ano</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descrição</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parcela</th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {tableItems.length === 0 ? (
+                                        <tr><td colSpan="7" className="px-6 py-4 text-center text-gray-500">Nenhuma movimentação registrada.</td></tr>
+                                    ) : (
+                                        tableItems.map((item) => {
+                                            const isReceita = item.tipo === 'recebimento';
+                                            const isPago = item.estaPago;
+                                            const statusText = isReceita ? (isPago ? 'Recebido' : 'A Receber') : (isPago ? 'Pago' : 'A Pagar');
+                                            const statusColor = isReceita ? (isPago ? 'text-green-600' : 'text-accent-yellow') : (isPago ? 'text-gray-500' : 'text-red-600');
+                                            const rowClass = isReceita ? 'hover:bg-green-50/50' : 'hover:bg-red-50/50';
+
+                                            return (
+                                                <tr key={`${item.chaveStatus}-${item.id}`} className={rowClass}>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                                                        {item.dia}/{item.parcelaMes}/{item.parcelaAno}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${isReceita ? 'bg-primary-dark/10 text-primary-dark' : 'bg-gray-100 text-gray-800'}`}>
+                                                            {isReceita ? 'RECEITA' : 'DESPESA'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-800">{item.nome}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.parcelaAtual}/{item.parcelas}</td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right" style={{ color: isReceita ? '#10B981' : '#EF4444' }}>
+                                                        {isReceita ? '+' : '-'} R$ {Number(item.valor).toFixed(2)}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                                                        <span className={`font-medium ${statusColor}`}>{statusText}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium flex gap-2 justify-center">
+                                                        <button 
+                                                            onClick={() => appProps.toggleStatus(item.chaveStatus, item.tipo)}
+                                                            title={`Marcar como ${isPago ? 'PENDENTE' : (isReceita ? 'RECEBIDO' : 'PAGO')}`}
+                                                            className={`text-gray-400 hover:text-primary-light`}>
+                                                            <Icon name={isPago ? "minus-circle" : "check-circle"} size={16}/>
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => appProps.excluirDivida(item.id, item.tipo)}
+                                                            title="Excluir Conta"
+                                                            className="btn-trash p-1 bg-red-100/70 hover:bg-red-200">
+                                                            <Icon name="trash-2" size={16} className="text-red-500 hover:text-red-700"/>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
-            );
+                );
+            };
             
-            // SetoresView agora é um placeholder, pois a funcionalidade foi removida.
+            // SetoresView agora é um placeholder
             const SetoresView = () => (
                  <div className="text-center py-10 text-gray-500">A funcionalidade de Análise (Tags/Setores) foi removida a pedido.</div>
             );
@@ -527,14 +625,15 @@
         };
         // --- FIM COMPONENTE: PlanilhaView ---
 
+        // Contexto para compartilhar funções do App com componentes aninhados
+        const AppContext = React.createContext();
+
         function App() {
             // --- Estado de Autenticação e Dados ---
             const [user, setUser] = useState(null);
             const [isAuthReady, setIsAuthReady] = useState(false);
             const [isDataLoading, setIsDataLoading] = useState(true); 
             
-            // REMOVIDO: sharedAccessId
-
             const [dividas, setDividas] = useState([]);
             const [recebimentos, setRecebimentos] = useState([]); 
             const [pagamentos, setPagamentos] = useState({});
@@ -546,10 +645,15 @@
             const [showModal, setShowModal] = useState(false);
             const [view, setView] = useState('calendario'); 
             
-            // Estados para o Modal de Confirmação (DELEÇÃO)
+            // NOVOS ESTADOS DE EXCLUSÃO (Reintroduzidos)
             const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
             const [itemToDelete, setItemToDelete] = useState(null); 
+            // NOVO ESTADO: Modal de Pagamento
+            const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+            const [itemToPay, setItemToPay] = useState(null);
 
+
+            // NOVO ESTADO INICIAL PARA DATA DE PAGAMENTO E COMPROVANTE (Movidos para o PaymentModal)
             const [newConta, setNewConta] = useState({
                 nome: '', valor: '', dia: '', parcelas: '1',
                 mesInicio: new Date().getMonth() + 1,
@@ -557,7 +661,7 @@
                 tipo: 'divida',
             });
 
-            // 1. Definição Global e Estática da Referência do Firestore (CORRIGIDO)
+            // 1. Definição Global e Estática da Referência do Firestore
             const USER_DOC_REF = user 
                 ? db.collection("shared_finances").doc(GLOBAL_DATA_ID) 
                 : null;
@@ -601,11 +705,9 @@
                     setIsDataLoading(false); 
                 }, (error) => {
                     console.error("Erro ao carregar dados do Firebase:", error);
-                    // Não precisa de alert(), mas registra o erro
                     setIsDataLoading(false); 
                 });
                 
-                // A dependência sharedAccessId foi removida
                 return () => unsubscribeData();
             }, [user]); 
             
@@ -616,6 +718,21 @@
                 newDate.setMonth(newDate.getMonth() + offset);
                 setViewDate(newDate);
             }, [viewDate]);
+
+            // NOVO: Função para abrir o modal de Pagamento/Recebimento
+            const handleToggleStatusClick = useCallback((chave, tipo) => {
+                const item = [...dividas, ...recebimentos].find(i => getStatusKey(i.id, getMonthDifference(i.mesInicio, i.anoInicio, viewDate.getMonth() + 1, viewDate.getFullYear())) === chave);
+                
+                if (item && !pagamentos[chave] && !recebimentoStatus[chave]) {
+                    // Item NÃO está pago/recebido: abre o modal de pagamento
+                    setItemToPay({ ...item, chaveStatus: chave, tipo, parcelaAtual: getMonthDifference(item.mesInicio, item.anoInicio, viewDate.getMonth() + 1, viewDate.getFullYear()) + 1 });
+                    setIsPaymentModalOpen(true);
+                } else {
+                    // Item JÁ está pago/recebido: desmarca instantaneamente
+                    toggleStatus(chave, tipo);
+                }
+            }, [dividas, recebimentos, pagamentos, recebimentoStatus, viewDate]);
+
 
             const toggleStatus = useCallback((chave, tipo) => {
                 if (!USER_DOC_REF) return;
@@ -639,6 +756,7 @@
                 }
             }, [dividas, recebimentos, pagamentos, recebimentoStatus, USER_DOC_REF]);
 
+            // NOVO: Função para confirmar a deleção e executar a exclusão no Firebase
             const handleDeleteConfirm = useCallback(() => {
                 if (!itemToDelete || !USER_DOC_REF) return;
 
@@ -664,13 +782,15 @@
             }, [dividas, recebimentos, pagamentos, recebimentoStatus, itemToDelete, USER_DOC_REF]);
 
 
-            // NOVA LÓGICA: Abre o modal de confirmação
+            // NOVO: Função que abre o modal de confirmação (chamada pelo botão LIXEIRA)
             const excluirDivida = useCallback((id, tipo) => {
-                setItemToDelete({ id, tipo });
+                // Montar um objeto temporário para o modal
+                const item = [...dividas, ...recebimentos].find(i => i.id === id) || { id, tipo, nome: 'Item Desconhecido', valor: 0 };
+                setItemToDelete({ ...item, tipo });
                 setIsConfirmModalOpen(true);
-            }, []);
-            // FIM NOVA LÓGICA
+            }, [dividas, recebimentos]);
 
+            // FIM NOVO: Lógica de Exclusão
 
             const handleAddConta = useCallback((e) => {
                 e.preventDefault();
@@ -684,6 +804,7 @@
                     parcelas: parseInt(newConta.parcelas),
                     mesInicio: parseInt(newConta.mesInicio),
                     anoInicio: parseInt(newConta.anoInicio),
+                    // Campos de pagamento removidos do cadastro inicial
                 };
                 
                 let newDividas = dividas;
@@ -700,10 +821,15 @@
                 saveDataToFirebase(USER_DOC_REF, newDividas, newRecebimentos, pagamentos, recebimentoStatus); 
 
                 setShowModal(false);
-                setNewConta({ nome: '', valor: '', dia: '', parcelas: '1', mesInicio: new Date().getMonth() + 1, anoInicio: new Date().getFullYear(), tipo: 'divida' });
+                setNewConta({ 
+                    nome: '', valor: '', dia: '', parcelas: '1', 
+                    mesInicio: new Date().getMonth() + 1, anoInicio: new Date().getFullYear(), 
+                    tipo: 'divida',
+                });
             }, [dividas, recebimentos, pagamentos, recebimentoStatus, newConta, USER_DOC_REF]);
             
-            // --- CÓDIGOS DE CÁLCULO ---
+            // --- CÓDIGOS DE CÁLCULO (Otimizado) ---
+            // (As funções movimentacoesDoMes e lifetimeMovimentacoes permanecem as mesmas)
 
             const movimentacoesDoMes = useMemo(() => {
                 if (isDataLoading) return { itens: [], totalDespesasPagas: 0, totalDespesasPendentes: 0, totalReceitasPagas: 0, totalReceitasPendentes: 0, saldo: 0 };
@@ -834,7 +960,7 @@
                                     
                                     return (
                                         <div key={conta.chaveStatus} 
-                                            onClick={() => toggleStatus(conta.chaveStatus, conta.tipo)}
+                                            onClick={() => handleToggleStatusClick(conta.chaveStatus, conta.tipo)}
                                             className={`text-[10px] px-1 py-0.5 rounded border truncate cursor-pointer select-none ${statusClass}`}
                                             title={`${isReceita ? 'Receita' : 'Despesa'} ${conta.nome} - R$ ${conta.valor}`}>
                                             {conta.nome} 
@@ -911,7 +1037,7 @@
                                     
                                     return (
                                         <div key={conta.chaveStatus} className="group bg-white border border-gray-100 rounded-lg p-3 hover:shadow-md transition-shadow flex items-start gap-3">
-                                            <button onClick={() => toggleStatus(conta.chaveStatus, conta.tipo)} className={`mt-1 ${isPago ? 'text-green-500' : 'text-gray-300 hover:text-primary-light'}`}>
+                                            <button onClick={() => handleToggleStatusClick(conta.chaveStatus, conta.tipo)} className={`mt-1 ${isPago ? 'text-green-500' : 'text-gray-300 hover:text-primary-light'}`}>
                                                 <Icon name={isPago ? "check-circle" : "circle"} size={20}/>
                                             </button>
                                             <div className="flex-1 min-w-0">
@@ -923,7 +1049,7 @@
                                                     <span>Dia {conta.dia} ({statusText})</span>
                                                     <div className="flex items-center gap-2">
                                                         <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{conta.parcelaAtual}/{conta.parcelas}</span>
-                                                        <button onClick={() => excluirDivida(conta.id, conta.tipo)} className="text-gray-400 hover:text-red-500">
+                                                        <button onClick={() => excluirDivida(conta.id, conta.tipo)} className="btn-trash">
                                                             <Icon name="trash-2" size={14} className="text-red-500 hover:text-red-700"/>
                                                         </button>
                                                     </div>
@@ -1038,17 +1164,19 @@
                     </nav>
 
                     {/* Conteúdo Renderizado com Base no Estado 'view' */}
-                    {view === 'calendario' && <CalendarioView />}
-                    {view === 'planilha' && (
-                        <main className="max-w-5xl mx-auto px-4 py-6">
-                            <PlanilhaView 
-                                movimentacoes={lifetimeMovimentacoes} 
-                                excluirDivida={excluirDivida} 
-                                toggleStatus={toggleStatus}
-                                isDataLoading={isDataLoading}
-                            />
-                        </main>
-                    )}
+                    <AppContext.Provider value={{ toggleStatus, excluirDivida }}>
+                        {view === 'calendario' && <CalendarioView />}
+                        {view === 'planilha' && (
+                            <main className="max-w-5xl mx-auto px-4 py-6">
+                                <PlanilhaView 
+                                    movimentacoes={lifetimeMovimentacoes} 
+                                    excluirDivida={excluirDivida} 
+                                    toggleStatus={handleToggleStatusClick} // Mudança: Usar handleToggleStatusClick
+                                    isDataLoading={isDataLoading}
+                                />
+                            </main>
+                        )}
+                    </AppContext.Provider>
 
                     {/* Modal (Adicionar Conta) */}
                     {showModal && (
@@ -1076,6 +1204,9 @@
                                         <div><label className="block text-sm font-medium text-gray-700 mb-1">Valor</label><input required type="number" step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-primary-light" value={newConta.valor} onChange={e => setNewConta({...newConta, valor: e.target.value})}/></div>
                                         <div><label className="block text-sm font-medium text-gray-700 mb-1">Dia</label><input required type="number" min="1" max="31" className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:border-primary-light" value={newConta.dia} onChange={e => setNewConta({...newConta, dia: e.target.value})}/></div>
                                     </div>
+                                    
+                                    {/* Campos de Data Pagamento/Comprovante removidos do cadastro inicial */}
+
                                     <div className="grid grid-cols-3 gap-4 bg-primary-light/10 p-4 rounded-lg border border-primary-light/20">
                                         <div><label className="block text-xs font-bold text-primary-dark mb-1">Parcelas</label><input type="number" min="1" className="w-full px-2 py-1 border border-primary-light/40 rounded text-sm" value={newConta.parcelas} onChange={e => setNewConta({...newConta, parcelas: e.target.value})}/></div>
                                         <div><label className="block text-xs font-bold text-primary-dark mb-1">Mês Início</label><input type="number" min="1" max="12" className="w-full px-2 py-1 border border-primary-light/40 rounded text-sm" value={newConta.mesInicio} onChange={e => setNewConta({...newConta, mesInicio: e.target.value})}/></div>
@@ -1090,12 +1221,20 @@
                         </div>
                     )}
 
-                    {/* Modal de Confirmação de Exclusão */}
+                    {/* Modal de Confirmação de Exclusão (REINTRODUZIDO) */}
                     <ConfirmModal 
                         isOpen={isConfirmModalOpen}
                         onClose={() => setIsConfirmModalOpen(false)}
                         onConfirm={handleDeleteConfirm}
                         item={itemToDelete}
+                    />
+                    
+                    {/* NOVO: Modal para Confirmação de Pagamento/Recebimento */}
+                    <PaymentModal
+                        isOpen={isPaymentModalOpen}
+                        onClose={() => setIsPaymentModalOpen(false)}
+                        item={itemToPay}
+                        toggleStatus={toggleStatus}
                     />
 
                 </div>
