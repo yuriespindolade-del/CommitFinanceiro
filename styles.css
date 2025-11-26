@@ -20,10 +20,12 @@ body {
     background-color: #f8fafc; /* Cinza muito claro, quase branco */
 }
 
-/* TRANSIÇÃO PARA BARRAS DO GRÁFICO */
-.chart-bar {
-    transition: height 0.5s ease-out, background-color 0.3s;
+/* TRANSIÇÃO PARA BARRAS DO GRÁFICO (Chart.js) */
+.chart-container {
+    height: 384px; /* Altura fixa para o gráfico Chart.js (h-96) */
+    position: relative;
 }
+
 
 /* --- ESTILOS PERSONALIZADOS PARA BOTÕES --- */
 
@@ -46,7 +48,7 @@ body {
     padding: 0.5rem 0.75rem; /* Ajuste para melhor toque em mobile */
 }
 
-/* Estilo para Botão de Exclusão (Lixeira) */
+/* Estilo para Botão de Exclusão (Lixeira) - AGORA USADO APENAS PARA PLACEHOLDER VISUAL */
 .btn-trash {
     /* Tailwind classes: p-1 rounded-full bg-red-100/70 hover:bg-red-200 */
     transition: background-color 0.2s ease;
