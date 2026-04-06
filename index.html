@@ -32,7 +32,7 @@
 <body>
     <div id="root">
         <div style="display: flex; height: 100vh; align-items: center; justify-content: center; color: #1e3a8a; font-family: sans-serif;">
-            <p>Carregando sistema...</p>
+            <p>A inicializar sistema...</p>
         </div>
     </div>
 
@@ -49,24 +49,12 @@
             appId: "1:1056339749032:web:375d2b01c4cba2a32efa9d"
         };
 
-        let firebaseConfig;
-        try {
-            firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : manualConfig;
-        } catch (e) {
-            firebaseConfig = manualConfig;
-        }
-
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : manualConfig;
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'commit-extension-v2';
 
-        // Inicialização Segura
-        let db, auth;
-        try {
-            if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-            db = firebase.firestore();
-            auth = firebase.auth();
-        } catch (err) {
-            console.error("Erro ao inicializar Firebase:", err);
-        }
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
 
         const ROLES_HOURS = {
             'diretor_inovacao': { title: 'Diretor de Inovação', hours: 20 },
@@ -91,20 +79,15 @@
             const [user, setUser] = useState(null);
             const [view, setView] = useState('dashboard');
             const [loading, setLoading] = useState(true);
+            const [authReady, setAuthReady] = useState(false);
             const [error, setError] = useState(null);
             const [loginData, setLoginData] = useState({ email: '', password: '' });
             const [showLogin, setShowLogin] = useState(false);
 
-            // Caminho fixo conforme regras do ambiente
-            const dataDocRef = db ? db.collection('artifacts').doc(appId).collection('public').doc('data').collection('members').doc('all') : null;
+            // Regra de Caminho: artifacts/{appId}/public/data/{collectionName}/{docId}
+            const dataDocRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('management').doc('members_registry');
 
             useEffect(() => {
-                if (!auth) {
-                    setError("Configuração do Firebase ausente. Verifique as credenciais no topo do código.");
-                    setLoading(false);
-                    return;
-                }
-
                 const initAuth = async () => {
                     try {
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -113,30 +96,46 @@
                             await auth.signInAnonymously();
                         }
                     } catch (err) {
-                        console.warn("Auth initialization skipped/failed:", err);
+                        console.error("Auth init error:", err);
                     }
                 };
+
+                const unsubscribeAuth = auth.onAuthStateChanged((u) => {
+                    setUser(u);
+                    setAuthReady(true);
+                });
+
                 initAuth();
-                const unsub = auth.onAuthStateChanged(setUser);
-                return () => unsub();
+                return () => unsubscribeAuth();
             }, []);
 
             useEffect(() => {
-                if (!user || !dataDocRef) return;
-                const unsub = dataDocRef.onSnapshot(doc => {
-                    if (doc.exists) setMembers(doc.data().members || []);
-                    else if (!user.isAnonymous) dataDocRef.set({ members: [] });
+                if (!authReady || !user) return;
+
+                const unsubscribeData = dataDocRef.onSnapshot((doc) => {
+                    if (doc.exists) {
+                        setMembers(doc.data().members || []);
+                    } else if (!user.isAnonymous) {
+                        dataDocRef.set({ members: [] }).catch(console.error);
+                    }
                     setLoading(false);
+                    setError(null);
                 }, (err) => {
                     console.error("Firestore Error:", err);
+                    setError("Erro ao carregar dados. Verifique as permissões do Firebase.");
                     setLoading(false);
                 });
-                return () => unsub();
-            }, [user]);
+
+                return () => unsubscribeData();
+            }, [user, authReady]);
 
             const saveMembers = async (newMembers) => {
                 if (!user || user.isAnonymous) return;
-                await dataDocRef.set({ members: newMembers }, { merge: true });
+                try {
+                    await dataDocRef.set({ members: newMembers }, { merge: true });
+                } catch (err) {
+                    alert("Erro ao salvar: Permissão insuficiente (Admin necessário).");
+                }
             };
 
             const getActivePoints = (history = []) => {
@@ -158,21 +157,26 @@
                     await auth.signInWithEmailAndPassword(loginData.email, loginData.password);
                     setShowLogin(false);
                     setView('admin');
-                } catch (err) { alert("Credenciais inválidas ou sem permissão de acesso."); }
+                } catch (err) { alert("Credenciais inválidas."); }
             };
 
-            if (error) return (
-                <div className="flex h-screen items-center justify-center bg-red-50 p-4 text-center">
-                    <div className="bg-white p-8 rounded-2xl shadow-xl max-w-sm">
-                        <h2 className="text-red-600 font-black mb-2">ERRO FIREBASE</h2>
-                        <p className="text-sm text-gray-600">{error}</p>
+            if (loading || !authReady) return (
+                <div className="flex h-screen items-center justify-center bg-gray-50">
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                        <p className="text-blue-900 font-bold text-sm">A sincronizar com Commit Cloud...</p>
                     </div>
                 </div>
             );
 
-            if (loading) return (
-                <div className="flex h-screen items-center justify-center bg-gray-50">
-                    <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            if (error) return (
+                <div className="flex h-screen items-center justify-center bg-red-50 p-6 text-center">
+                    <div className="bg-white p-8 rounded-3xl shadow-xl max-w-sm">
+                        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-red-600 mx-auto mb-4">!</div>
+                        <h2 className="text-gray-900 font-black mb-2 uppercase">Erro Crítico</h2>
+                        <p className="text-sm text-gray-600 mb-6">{error}</p>
+                        <button onClick={() => window.location.reload()} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold">Tentar Novamente</button>
+                    </div>
                 </div>
             );
 
@@ -199,6 +203,10 @@
                                 <button onClick={() => setShowLogin(true)} className="px-5 py-2 rounded-xl text-xs font-black uppercase tracking-wider text-gray-400 hover:bg-gray-50">Entrar</button>
                             )}
                         </nav>
+                        
+                        {user && !user.isAnonymous && (
+                            <button onClick={() => auth.signOut()} className="text-gray-400 hover:text-red-500 transition"><Icons.Trash /></button>
+                        )}
                     </header>
 
                     {view === 'dashboard' && (
@@ -209,30 +217,29 @@
                                     <div key={m.id} className={`bg-white rounded-2xl shadow-sm p-6 border-l-4 ${points >= 20 ? 'border-red-600 critical-alert' : 'border-blue-600'}`}>
                                         <div className="flex justify-between items-start mb-4">
                                             <div className="max-w-[70%]">
-                                                <h3 className="font-black text-gray-800 leading-tight truncate" title={m.name}>{m.name}</h3>
+                                                <h3 className="font-black text-gray-800 leading-tight truncate">{m.name}</h3>
                                                 <p className="text-[9px] text-blue-600 font-black uppercase mt-1 truncate">{m.roles.map(r => ROLES_HOURS[r]?.title).join(' / ')}</p>
                                             </div>
                                             {m.isOverdelivery && (
                                                 <div className="flex flex-col items-end shrink-0">
                                                     <span className="overdelivery-badge text-white text-[8px] px-2 py-1 rounded-lg font-black shadow-sm">OVERDELIVERY</span>
-                                                    <span className="text-[7px] font-bold text-gray-400 mt-1 uppercase whitespace-nowrap">{m.overdeliveryDate}</span>
+                                                    <span className="text-[7px] font-bold text-gray-400 mt-1 uppercase">{m.overdeliveryDate}</span>
                                                 </div>
                                             )}
                                         </div>
                                         <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-50">
                                             <div>
-                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Horas Semanais</p>
+                                                <p className="text-[9px] font-bold text-gray-400 uppercase">Horas Semanais</p>
                                                 <p className="text-lg font-black text-blue-700">{calculateWeeklyHours(m)}h</p>
                                             </div>
                                             <div>
-                                                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Pontos (8 meses)</p>
+                                                <p className="text-[9px] font-bold text-gray-400 uppercase">Pontos (8 meses)</p>
                                                 <p className={`text-lg font-black ${points >= 15 ? 'text-red-600' : 'text-gray-800'}`}>{points}/20</p>
                                             </div>
                                         </div>
                                     </div>
                                 );
                             })}
-                            {members.length === 0 && <div className="col-span-full py-12 text-center text-gray-400 font-bold uppercase text-xs">Nenhum membro cadastrado</div>}
                         </div>
                     )}
 
@@ -261,7 +268,7 @@
                                                     const isExpired = new Date(h.date) < new Date().setMonth(new Date().getMonth() - 8);
                                                     return (
                                                         <tr key={i} className={isExpired ? 'opacity-30' : ''}>
-                                                            <td className="px-2 py-3 whitespace-nowrap font-medium">{new Date(h.date).toLocaleDateString()}</td>
+                                                            <td className="px-2 py-3 whitespace-nowrap">{new Date(h.date).toLocaleDateString()}</td>
                                                             <td className="px-2 py-3">{h.reason} {isExpired && <span className="ml-2 text-[8px] bg-gray-200 px-1 rounded uppercase font-bold">Expirado</span>}</td>
                                                             <td className="px-2 py-3 text-right font-bold text-red-600">{h.points}</td>
                                                         </tr>
@@ -269,7 +276,6 @@
                                                 })}
                                             </tbody>
                                         </table>
-                                        {(!m.conductHistory || m.conductHistory.length === 0) && <p className="text-center py-4 text-gray-400 text-[10px] font-bold uppercase">Sem ocorrências</p>}
                                     </div>
                                 </div>
                             ))}
@@ -283,12 +289,12 @@
                     {showLogin && (
                         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                             <form onSubmit={handleLogin} className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-8 animate-fadeIn">
-                                <h2 className="text-xl font-black text-center mb-6">ADMINISTRATIVO</h2>
+                                <h2 className="text-xl font-black text-center mb-6">LOGIN ADMIN</h2>
                                 <input type="email" placeholder="E-mail" className="w-full px-4 py-3 rounded-xl border mb-3 focus:ring-2 focus:ring-blue-500 outline-none" value={loginData.email} onChange={e => setLoginData({...loginData, email: e.target.value})} required/>
                                 <input type="password" placeholder="Senha" className="w-full px-4 py-3 rounded-xl border mb-6 focus:ring-2 focus:ring-blue-500 outline-none" value={loginData.password} onChange={e => setLoginData({...loginData, password: e.target.value})} required/>
                                 <div className="flex gap-2">
                                     <button type="button" onClick={() => setShowLogin(false)} className="flex-1 py-3 text-gray-400 font-black text-xs uppercase">Voltar</button>
-                                    <button type="submit" className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase shadow-lg shadow-blue-200">Entrar</button>
+                                    <button type="submit" className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase shadow-lg shadow-blue-200">Aceder</button>
                                 </div>
                             </form>
                         </div>
@@ -322,41 +328,37 @@
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                             <h3 className="text-[10px] font-black uppercase text-gray-400 mb-4 tracking-widest">Cadastrar Membro</h3>
                             <div className="space-y-3">
-                                <input type="text" placeholder="Nome Completo" className="w-full px-4 py-2 border rounded-xl text-sm" value={newM.name} onChange={e => setNewM({...newM, name: e.target.value})}/>
-                                <button onClick={handleAddMember} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">Salvar</button>
+                                <input type="text" placeholder="Nome" className="w-full px-4 py-2 border rounded-xl text-sm" value={newM.name} onChange={e => setNewM({...newM, name: e.target.value})}/>
+                                <button onClick={handleAddMember} className="w-full py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">Guardar</button>
                             </div>
                         </div>
 
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                            <h3 className="text-[10px] font-black uppercase text-gray-400 mb-4 tracking-widest">Lançar Pontos de Conduta</h3>
+                            <h3 className="text-[10px] font-black uppercase text-gray-400 mb-4 tracking-widest">Infração</h3>
                             <div className="space-y-3">
                                 <select className="w-full px-4 py-2 border rounded-xl text-sm bg-white" value={infraction.memberId} onChange={e => setInfraction({...infraction, memberId: e.target.value})}>
-                                    <option value="">Selecionar...</option>
+                                    <option value="">Escolher Membro...</option>
                                     {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                                 </select>
                                 <div className="grid grid-cols-2 gap-2">
-                                    <input type="number" placeholder="Pontos" className="px-4 py-2 border rounded-xl text-sm" value={infraction.points} onChange={e => setInfraction({...infraction, points: e.target.value})}/>
+                                    <input type="number" className="px-4 py-2 border rounded-xl text-sm" value={infraction.points} onChange={e => setInfraction({...infraction, points: e.target.value})}/>
                                     <input type="date" className="px-4 py-2 border rounded-xl text-sm" value={infraction.date} onChange={e => setInfraction({...infraction, date: e.target.value})}/>
                                 </div>
-                                <input type="text" placeholder="Motivo da infração" className="w-full px-4 py-2 border rounded-xl text-sm" value={infraction.reason} onChange={e => setInfraction({...infraction, reason: e.target.value})}/>
+                                <input type="text" placeholder="Motivo" className="w-full px-4 py-2 border rounded-xl text-sm" value={infraction.reason} onChange={e => setInfraction({...infraction, reason: e.target.value})}/>
                                 <button onClick={addInfraction} className="w-full py-2 bg-red-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">Aplicar</button>
                             </div>
                         </div>
                     </div>
 
                     <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
-                        <div className="p-4 bg-gray-50 border-b">
-                            <h3 className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Gerenciador Geral</h3>
-                        </div>
                         <div className="overflow-x-auto custom-scrollbar">
                             <table className="w-full text-left text-xs min-w-[800px]">
                                 <thead className="bg-gray-50 text-gray-400 uppercase font-black border-b">
                                     <tr>
                                         <th className="p-4">Membro</th>
-                                        <th className="p-4">Cargos</th>
-                                        <th className="p-4">Extras/Descontos</th>
+                                        <th className="p-4">Extras/Desc</th>
                                         <th className="p-4">Overdelivery</th>
-                                        <th className="p-4 text-center">Excluir</th>
+                                        <th className="p-4 text-center">Remover</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
@@ -364,29 +366,12 @@
                                         <tr key={m.id}>
                                             <td className="p-4 font-black">{m.name}</td>
                                             <td className="p-4">
-                                                <div className="flex flex-wrap gap-1 max-w-[200px]">
-                                                    {Object.keys(ROLES_HOURS).map(role => (
-                                                        <button 
-                                                            key={role}
-                                                            onClick={() => {
-                                                                const newRoles = m.roles.includes(role) ? m.roles.filter(r => r !== role) : [...m.roles, role];
-                                                                const updated = members.map(x => x.id === m.id ? {...x, roles: newRoles.length ? newRoles : ['membro']} : x);
-                                                                setMembers(updated); saveMembers(updated);
-                                                            }}
-                                                            className={`text-[8px] px-1 py-0.5 rounded uppercase font-bold transition ${m.roles.includes(role) ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}
-                                                        >
-                                                            {ROLES_HOURS[role].title.split(' ')[0]}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </td>
-                                            <td className="p-4">
                                                 <div className="flex gap-1">
-                                                    <input type="number" placeholder="+" className="w-10 p-1 border rounded text-[10px]" value={m.extraHours} onChange={e => {
+                                                    <input type="number" className="w-10 p-1 border rounded text-[10px]" value={m.extraHours} onChange={e => {
                                                         const updated = members.map(x => x.id === m.id ? { ...x, extraHours: parseInt(e.target.value) || 0 } : x);
                                                         setMembers(updated); saveMembers(updated);
                                                     }}/>
-                                                    <input type="number" placeholder="-" className="w-10 p-1 border rounded text-[10px]" value={m.penaltyHours} onChange={e => {
+                                                    <input type="number" className="w-10 p-1 border rounded text-[10px]" value={m.penaltyHours} onChange={e => {
                                                         const updated = members.map(x => x.id === m.id ? { ...x, penaltyHours: parseInt(e.target.value) || 0 } : x);
                                                         setMembers(updated); saveMembers(updated);
                                                     }}/>
@@ -394,7 +379,7 @@
                                             </td>
                                             <td className="p-4">
                                                 <div className="flex gap-2">
-                                                    <input type="text" placeholder="Semana/Mês" className="flex-1 p-1 border rounded text-[10px]" value={overdelivery.memberId === m.id ? overdelivery.dateStr : (m.isOverdelivery ? m.overdeliveryDate : '')} onChange={e => setOverdelivery({ memberId: m.id, dateStr: e.target.value })}/>
+                                                    <input type="text" placeholder="Ex: Semana 1 Out" className="flex-1 p-1 border rounded text-[10px]" value={overdelivery.memberId === m.id ? overdelivery.dateStr : (m.isOverdelivery ? m.overdeliveryDate : '')} onChange={e => setOverdelivery({ memberId: m.id, dateStr: e.target.value })}/>
                                                     <button onClick={() => {
                                                         const dateToUse = overdelivery.memberId === m.id ? overdelivery.dateStr : m.overdeliveryDate;
                                                         const updated = members.map(x => x.id === m.id ? { ...x, isOverdelivery: !x.isOverdelivery, overdeliveryDate: dateToUse } : x);
@@ -404,7 +389,7 @@
                                             </td>
                                             <td className="p-4 text-center">
                                                 <button onClick={() => {
-                                                    if(confirm(`Excluir ${m.name}?`)) {
+                                                    if(confirm(`Eliminar ${m.name}?`)) {
                                                         const updated = members.filter(x => x.id !== m.id);
                                                         setMembers(updated); saveMembers(updated);
                                                     }
